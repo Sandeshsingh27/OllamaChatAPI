@@ -8,7 +8,7 @@
         <version>3.5.0</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.telusko</groupId>
+    <groupId>com.springai</groupId>
     <artifactId>SpringAICode</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>SpringAICode</name>

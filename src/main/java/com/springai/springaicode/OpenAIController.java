@@ -1,4 +1,4 @@
-//package com.telusko.springaicode;
+//package com.springai.springaicode;
 //
 //import org.springframework.ai.chat.client.ChatClient;
 //import org.springframework.ai.chat.model.ChatResponse;

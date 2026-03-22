@@ -1,4 +1,4 @@
-package com.telusko.springaicode;
+package com.springai.springaicode;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

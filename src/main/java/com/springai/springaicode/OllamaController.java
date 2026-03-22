@@ -1,4 +1,4 @@
-package com.telusko.springaicode;
+package com.springai.springaicode;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -27,6 +27,11 @@ public class OllamaController {
 //                .build();
 //
 //    }
+
+    @GetMapping("/")
+    public ResponseEntity<String> welcome() {
+        return ResponseEntity.ok("Welcome to the Ollama Chat API!");
+    }
 
     @GetMapping("/api/{message}")
     public ResponseEntity<String> getAnswer(@PathVariable String message) {
