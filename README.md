@@ -1,383 +1,450 @@
 # OllamaChatAPI
 
-A **Spring Boot REST API** that lets you chat with a locally running LLM (Large Language Model) using **[Ollama](https://ollama.com/)** and **[Spring AI](https://spring.io/projects/spring-ai)**.  
-The API supports both a **blocking endpoint** (full response at once) and a **streaming endpoint** (tokens arrive in real time), and optionally keeps per-session **conversation memory** via a `MessageChatMemoryAdvisor`.
+A full-stack chat application that lets you talk to a locally running LLM using **[Ollama](https://ollama.com/)**.  
+The **Spring Boot** backend exposes a streaming REST API powered by **Spring AI**, and the **React + TypeScript** frontend delivers a real-time chat UI with conversation memory — all running entirely on your machine, no cloud required.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Java 17 |
-| Framework | Spring Boot 3.5.0 |
-| AI Integration | Spring AI 1.1.3 |
-| LLM Runtime | Ollama (local) |
-| Default Model | Mistral 7B |
-| Build Tool | Maven (Maven Wrapper included) |
+| Layer | Technology | Version |
+|---|---|---|
+| Backend Language | Java | 17+ |
+| Backend Framework | Spring Boot | 3.5.0 |
+| AI Integration | Spring AI | 1.1.3 |
+| LLM Runtime | Ollama (local) | latest |
+| Default Model | Mistral 7B | latest |
+| Backend Build | Maven Wrapper | included |
+| Frontend Language | TypeScript | 5.6 |
+| Frontend Framework | React | 18.3 |
+| Frontend Build Tool | Vite | 8+ |
+| Node.js Manager | nodeenv (Python) | latest |
+| Icons | lucide-react | 0.4+ |
 
 ---
 
 ## Project Structure
 
 ```
-src/
-├── main/
-│   ├── java/com/springai/springaicode/
-│   │   ├── SpringAiCodeApplication.java   # Entry point
-│   │   ├── OllamaController.java          # REST endpoints
-│   │   └── OllamaClientConfig.java        # WebClient timeout config
-│   └── resources/
-│       └── application.properties         # App & Ollama settings
+OllamaChatAPI/
+│
+├── src/                                   # Spring Boot backend
+│   └── main/
+│       ├── java/com/springai/springaicode/
+│       │   ├── SpringAiCodeApplication.java   # Entry point
+│       │   ├── OllamaController.java          # REST + SSE endpoints
+│       │   └── OllamaClientConfig.java        # WebClient timeout config
+│       └── resources/
+│           └── application.properties         # Ollama & Spring settings
+│
+├── frontend/                              # React + TypeScript frontend
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── ChatMessage.tsx            # Individual message bubble
+│   │   │   ├── ChatMessage.module.css
+│   │   │   ├── ChatInput.tsx              # Textarea + Send / Stop button
+│   │   │   └── ChatInput.module.css
+│   │   ├── hooks/
+│   │   │   └── useChat.ts                 # All chat logic + SSE streaming
+│   │   ├── App.tsx                        # Root component + header
+│   │   ├── App.css
+│   │   ├── types.ts                       # Message type definitions
+│   │   ├── main.tsx                       # React entry point
+│   │   └── vite-env.d.ts                  # Typed VITE_* env declarations
+│   ├── .env                               # Shared defaults (committed)
+│   ├── .env.development                   # Dev overrides — Vite proxy (committed)
+│   ├── .env.production                    # Prod overrides — direct URL (committed)
+│   ├── vite.config.ts                     # Vite + proxy config (reads env)
+│   ├── tsconfig.json                      # Browser TypeScript config
+│   ├── tsconfig.node.json                 # Node / Vite TypeScript config
+│   └── package.json
+│
+├── .gitignore
+├── pom.xml
+└── README.md
 ```
 
 ---
 
-## Prerequisites
+## Full-Stack Architecture
 
-You need **three** things installed before running the project:
-
-1. **Java 17+**
-2. **Apache Maven** *(or just use the included Maven Wrapper — no install needed)*
-3. **Ollama** *(runs the LLM locally)*
+```
+ ┌─────────────────────────────────────────────────────────────┐
+ │                Browser  (localhost:5173)                     │
+ │                                                             │
+ │  ┌───────────────────────────────────────────────────────┐  │
+ │  │           React + TypeScript  (Vite)                  │  │
+ │  │                                                       │  │
+ │  │  ┌──────────────────┐    ┌──────────────────────────┐ │  │
+ │  │  │   useChat hook   │    │    ChatMessage           │ │  │
+ │  │  │                  │    │    • user bubble (blue)  │ │  │
+ │  │  │ • conversationId │    │    • AI bubble (white)   │ │  │
+ │  │  │ • sendMessage()  │    │    • streaming cursor ▌  │ │  │
+ │  │  │ • newChat()      │    │    • error state         │ │  │
+ │  │  │ • SSE parser     │    └──────────────────────────┘ │  │
+ │  │  └────────┬─────────┘                                 │  │
+ │  └───────────┼───────────────────────────────────────────┘  │
+ └──────────────┼──────────────────────────────────────────────┘
+                │
+                │  POST /api/chat/stream
+                │  { message, conversationId }
+                │  ──── Vite proxy (dev only) ────▶
+                │
+                ▼  SSE response: data:token\n\n ...
+ ┌──────────────────────────────────────────────────────────────┐
+ │             Spring Boot  (localhost:8080)                     │
+ │                                                              │
+ │  ┌─────────────────────┐   ┌──────────────────────────────┐  │
+ │  │  OllamaController   │──▶│  MessageChatMemoryAdvisor    │  │
+ │  │                     │   │                              │  │
+ │  │  POST /api/chat     │   │  1. reads last 20 messages   │  │
+ │  │  POST /api/chat/    │   │     for conversationId       │  │
+ │  │        stream  (SSE)│   │  2. prepends history to      │  │
+ │  │  GET  /api/{message}│   │     current prompt           │  │
+ │  │  @CrossOrigin("*")  │   │  3. saves new turn after     │  │
+ │  └─────────────────────┘   └──────────────┬───────────────┘  │
+ │                                           │                  │
+ │  ┌─────────────────────┐                  │                  │
+ │  │  OllamaClientConfig │ 300 s timeout    │                  │
+ │  │  ReactorNetty       │                  │                  │
+ │  └─────────────────────┘                  │                  │
+ └──────────────────────────────────────────┼───────────────────┘
+                                            │
+                                            │  POST /api/chat (stream)
+                                            ▼
+                           ┌─────────────────────────────────┐
+                           │    Ollama  (localhost:11434)     │
+                           │    Model : mistral:latest        │
+                           │    Runs on local CPU / GPU       │
+                           └─────────────────────────────────┘
+```
 
 ---
 
-## Step 1 — Install Java 17+
+## Backend Setup
 
-### Windows
-1. Download from [https://adoptium.net](https://adoptium.net) (Eclipse Temurin JDK 17 or higher).
-2. Run the installer and follow the prompts.
-3. Verify:
+### Step 1 — Install Java 17+
+
+**Windows:** Download from [https://adoptium.net](https://adoptium.net) and run the installer.  
+**macOS:** `brew install openjdk@17`  
+**Linux:** `sudo apt update && sudo apt install openjdk-17-jdk -y`
+
+```bash
+java -version   # must print 17.x.x or higher
+```
+
+### Step 2 — Install Ollama
+
+**Windows:** [https://ollama.com/download/windows](https://ollama.com/download/windows)  
+**macOS:** `brew install ollama`  
+**Linux:** `curl -fsSL https://ollama.com/install.sh | sh`
+
+### Step 3 — Pull the Mistral model
+
+```bash
+ollama pull mistral        # ~4 GB — best balance of quality / speed
+# Lighter alternatives:
+# ollama pull phi3         # ~2 GB
+# ollama pull gemma2:2b    # ~1.6 GB  (update application.properties to match)
+```
+
+### Step 4 — Start Ollama (keep model warm)
+
 ```powershell
-java -version
-# Should print: openjdk version "17.x.x" ...
-```
-
-### macOS (Homebrew)
-```bash
-brew install openjdk@17
-java -version
-```
-
-### Linux (Ubuntu/Debian)
-```bash
-sudo apt update && sudo apt install openjdk-17-jdk -y
-java -version
-```
-
----
-
-## Step 2 — Install Maven (Optional)
-
-This project includes a **Maven Wrapper** (`mvnw` / `mvnw.cmd`), so you do **not** need to install Maven separately.  
-If you prefer a global installation:
-
-- **Windows:** Download from [https://maven.apache.org/download.cgi](https://maven.apache.org/download.cgi), extract, and add `bin/` to your `PATH`.
-- **macOS:** `brew install maven`
-- **Linux:** `sudo apt install maven -y`
-
-Verify:
-```bash
-mvn -version
-```
-
----
-
-## Step 3 — Install Ollama
-
-Ollama runs LLMs locally on your machine. No internet connection is needed at inference time once the model is downloaded.
-
-### Windows
-Download and run the installer from: [https://ollama.com/download/windows](https://ollama.com/download/windows)
-
-### macOS
-```bash
-brew install ollama
-```
-
-### Linux
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-Verify Ollama is running:
-```bash
-ollama --version
-```
-
----
-
-## Step 4 — Pull the Mistral Model
-
-After installing Ollama, download the Mistral 7B model (~4 GB):
-
-```bash
-ollama pull mistral
-```
-
-Verify it was downloaded:
-```bash
-ollama list
-# NAME              ID              SIZE    MODIFIED
-# mistral:latest    ...             4.1 GB  ...
-```
-
-> **Want a smaller/faster model?**  
-> Replace `mistral` with `phi3` (~2 GB) or `gemma2:2b` (~1.6 GB) and update `application.properties` accordingly.
-
----
-
-## Step 5 — Start Ollama 
-**Windows PowerShell:**
-```powershell
+# Windows PowerShell
+$env:OLLAMA_KEEP_ALIVE = "-1"   # never unload the model from RAM
 ollama serve
 ```
 
-**macOS / Linux:**
 ```bash
-ollama serve
+# macOS / Linux
+OLLAMA_KEEP_ALIVE=-1 ollama serve
 ```
 
-> If you installed Ollama as a background service on Windows, it starts automatically — open Task Manager → Services → find `Ollama` → right-click → Stop, then run the command above.
+> Without `OLLAMA_KEEP_ALIVE=-1`, Ollama unloads the model after ~5 min idle, causing a 20–30 s cold-start on the next request.
 
----
-
-## Step 6 — Clone & Configure
-
-```bash
-git clone https://github.com/Sandeshsingh27/OllamaChatAPI.git
-cd OllamaChatAPI
-```
-
-Open `src/main/resources/application.properties` and verify:
-
-```properties
-spring.application.name=SpringAICode
-
-# Change this if you pulled a different model
-spring.ai.ollama.chat.options.model=mistral
-```
-
----
-
-## Step 7 — Build & Run
-
-**Using Maven Wrapper (recommended — no Maven install needed):**
+### Step 5 — Run the Spring Boot API
 
 ```powershell
-# Windows
+# Windows — Maven Wrapper (no Maven install needed)
 .\mvnw.cmd spring-boot:run
 
 # macOS / Linux
 ./mvnw spring-boot:run
 ```
 
-**Using installed Maven:**
+API is live at **http://localhost:8080**
+
+---
+
+## Backend API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Health check |
+| `GET` | `/api/{message}?conversationId=` | Blocking — legacy, for Postman |
+| `POST` | `/api/chat` | Blocking — JSON body |
+| `POST` | `/api/chat/stream` | **Streaming SSE** ← used by the React UI |
+
+**Example streaming request:**
+
 ```bash
-mvn spring-boot:run
+curl -X POST http://localhost:8080/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"message":"What is the capital of France?","conversationId":"session-1"}'
 ```
 
-The app starts on **http://localhost:8080** by default.
-
----
-
-## API Endpoints
-
-### `GET /`
-Health check / welcome message.
-
+Streamed response:
 ```
-GET http://localhost:8080/
-→ 200 OK: "Welcome to the Ollama Chat API!"
-```
-
----
-
-### `GET /api/{message}`
-**Blocking endpoint.** Waits for the full LLM response before returning.
-
-```
-GET http://localhost:8080/api/What is the capital of France?
-→ 200 OK: "The capital of France is Paris."
-```
-
-> ⚠️ For long or complex questions this can take 30+ seconds depending on your hardware.  
-> Use the streaming endpoint below for a better experience.
-
-**With conversation memory** (see Advisor section):
-```
-GET http://localhost:8080/api/My name is Sandesh?conversationId=session-1
-GET http://localhost:8080/api/What is my name?conversationId=session-1
-→ "Your name is Sandesh."
+data:The
+data: capital
+data: of
+data: France
+data: is
+data: Paris.
 ```
 
 ---
 
-### `GET /api/stream/{message}` *(Streaming)*
-**Streaming endpoint.** Returns tokens as **Server-Sent Events (SSE)** — you see the first word in ~1 second instead of waiting for the full response.
+## Frontend Features
+
+| Feature | Description |
+|---|---|
+| 💬 **Real-time streaming** | Tokens appear word-by-word as Mistral generates — no waiting for the full response |
+| 🧠 **Conversation memory** | Each session has a `conversationId`; the backend remembers the last 20 messages |
+| ✨ **New Chat button** | Starts a fresh session with a new `conversationId` — previous history stays isolated on the backend |
+| 🗑️ **Clear button** | Clears visible messages while keeping the same `conversationId` (backend memory intact) |
+| ⏹️ **Stop generation** | Cancels mid-stream at any time |
+| 💡 **Suggestion chips** | Quick-start prompts shown on the welcome screen |
+| ⚡ **Auto-scroll** | Chat window follows the latest message as it streams in |
+| 🔴 **Inline error display** | Ollama errors appear inside the chat bubble, not as a crash |
+| ⌨️ **Keyboard shortcuts** | `Enter` to send · `Shift + Enter` for a new line |
+| 🌐 **Configurable via `.env`** | App title, model badge, API URL, and port all driven by env files |
+
+---
+
+## Frontend — How It Connects to the Backend
+
+The React app (`localhost:5173`) and the Spring Boot API (`localhost:8080`) are on **different ports**, which means different origins and normally triggers CORS errors.
+
+**Vite's dev-server proxy** solves this transparently:
 
 ```
-GET http://localhost:8080/api/stream/Explain quantum computing
+Browser (5173)        Vite Dev Server       Spring Boot (8080)
+     │                      │                      │
+     │  POST /api/chat/     │                      │
+     │       stream         │                      │
+     │─────────────────────▶│                      │
+     │                      │  POST /api/chat/     │
+     │                      │       stream         │
+     │                      │─────────────────────▶│
+     │                      │                      │  → Ollama
+     │   data:token\n\n     │   data:token\n\n     │◀─ streams
+     │◀─────────────────────│◀─────────────────────│
 ```
 
-**In Postman / Insomnia:**
-- Method: `GET`
-- URL: `http://localhost:8080/api/stream/Explain quantum computing`
-- The response panel fills in real-time as tokens stream in.
+- The browser only ever talks to **`localhost:5173`** (same origin → no CORS)
+- Vite silently forwards every `/api/*` request to **`BACKEND_URL`** from `.env.development`
+- In production (`npm run build`), the built files are served statically — there is no proxy, so `VITE_API_BASE_URL` is set to the full Spring Boot URL and `@CrossOrigin("*")` on the controller allows the direct request
 
-**With conversation memory:**
+---
+
+## Frontend — Environment Files
+
+| File | Committed | Purpose |
+|---|---|---|
+| `.env` | ✅ | Shared defaults: app title, model name, endpoint paths, dev port |
+| `.env.development` | ✅ | `VITE_API_BASE_URL=` (empty → proxy), `BACKEND_URL=http://localhost:8080` |
+| `.env.production` | ✅ | `VITE_API_BASE_URL=http://localhost:8080` (direct call) |
+| `.env.local` | ❌ gitignored | Your personal machine overrides — never committed |
+
+**Override anything without touching committed files:**
+
+```env
+# frontend/.env.local
+VITE_MODEL_NAME=phi3
+VITE_APP_TITLE=MyChat
+VITE_DEV_PORT=3000
+BACKEND_URL=http://192.168.1.42:8080
 ```
-GET http://localhost:8080/api/stream/Who am I??conversationId=session-1
+
+---
+
+## Frontend — Installation
+
+The frontend uses **nodeenv** — a Python package that installs Node.js inside a Python virtual environment. This creates a fully isolated, reproducible Node.js environment with no admin rights required.
+
+### Step 1 — Verify Python 3.8+
+
+```bash
+python --version
 ```
+
+Install if missing: [https://python.org/downloads](https://python.org/downloads)  
+Linux: `sudo apt install python3 python3-venv -y`
+
+### Step 2 — Create a Python virtual environment
+
+```bash
+cd frontend
+python -m venv .venv
+```
+
+### Step 3 — Activate the virtual environment
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+source .venv/bin/activate
+```
+
+Your terminal prompt changes to `(.venv)` — you are now inside the isolated environment.
+
+> **Windows — if script execution is blocked:**
+> ```powershell
+> Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+> ```
+
+### Step 4 — Install nodeenv
+
+```bash
+pip install nodeenv
+```
+
+### Step 5 — Install the latest Node.js into the venv
+
+```bash
+nodeenv --node=latest --prebuilt -p
+```
+
+This downloads the latest Node.js binary directly into `.venv/Scripts/` (Windows) or `.venv/bin/` (macOS/Linux). Verify:
+
+```bash
+node --version    # e.g. v25.x.x
+npm  --version    # e.g. 11.x.x
+```
+
+> **Windows only — if `node` is not found after activation:**
+> ```powershell
+> $env:PATH = "$(Resolve-Path '.\.venv\Scripts');$env:PATH"
+> node --version
+> ```
+
+### Step 6 — Install npm packages
+
+```bash
+npm install
+```
+
+### Step 7 — Start the dev server
+
+```bash
+npm run dev
+```
+
+Open **http://localhost:5173** 🎉
+
+> Make sure Spring Boot is already running on `8080` before opening the UI.
+
+---
+
+## Frontend — Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start Vite dev server with hot-reload (`http://localhost:5173`) |
+| `npm run build` | TypeScript compile + Vite production bundle → `dist/` |
+| `npm run preview` | Serve the production build locally to verify before deploying |
 
 ---
 
 ## Advisor Implementation — `MessageChatMemoryAdvisor`
 
-### What is an Advisor?
+### Why is it necessary?
 
-In Spring AI, an **Advisor** is middleware that wraps every call to the LLM.  
-It can inspect and modify the **prompt before** it is sent, and inspect the **response after** it is received.
-
-`MessageChatMemoryAdvisor` is a built-in Spring AI advisor that gives the model **short-term memory** — it automatically:
-1. **Reads** the N most recent messages from a `ChatMemory` store for the given `conversationId`.
-2. **Injects** those messages into the current prompt so the model has context from earlier turns.
-3. **Saves** the new user message + model reply back into `ChatMemory` after each call.
-
-### Why Is It Necessary?
-
-LLMs are **stateless by design** — every call to `POST /api/chat` is completely independent.  
-Without an advisor:
+LLMs are **stateless** — every HTTP request to Ollama is independent with no memory of previous calls. Without an advisor:
 
 ```
-User:  "My name is Sandesh"   → Model: "Nice to meet you, Sandesh!"
-User:  "What is my name?"     → Model: "I don't know your name." ❌
+User: "My name is Sandesh"  →  Model: "Nice to meet you, Sandesh!"
+User: "What is my name?"    →  Model: "I don't know your name." ❌
 ```
 
 With `MessageChatMemoryAdvisor`:
 
 ```
-User:  "My name is Sandesh"   → Model: "Nice to meet you, Sandesh!"
-User:  "What is my name?"     → Model: "Your name is Sandesh." ✅
+User: "My name is Sandesh"  →  Model: "Nice to meet you, Sandesh!"
+User: "What is my name?"    →  Model: "Your name is Sandesh." ✅
 ```
 
-The advisor bridges the gap between the stateless HTTP API and a stateful conversation experience.
-
----
-
-### How It Works — Step by Step
+### How it works — step by step
 
 ```
-Request: GET /api/Tell me a joke?conversationId=user-42
+POST /api/chat/stream  { "message": "Tell me a joke", "conversationId": "user-42" }
 
-1. ChatClient calls MessageChatMemoryAdvisor.before(request)
-   └─ Reads previous messages for conversationId="user-42" from ChatMemory
-   └─ Prepends them to the current prompt:
-        [SYSTEM] You are a helpful assistant.
-        [USER]   My favourite topic is science.       ← from memory
-        [ASSISTANT] Great, I love science too!        ← from memory
-        [USER]   Tell me a joke                       ← current message
+  1. Advisor reads history for "user-42" from MessageWindowChatMemory
+     └─ [USER: My name is Sandesh] [ASSISTANT: Nice to meet you!]
 
-2. Full enriched prompt → sent to Ollama (mistral)
+  2. Enriched prompt is built:
+     [USER]        My name is Sandesh        ← from memory
+     [ASSISTANT]   Nice to meet you!         ← from memory
+     [USER]        Tell me a joke            ← current message
 
-3. Ollama returns: "Why can't you trust an atom? Because they make up everything!"
+  3. Full prompt sent to Ollama → generates: "Why can't you trust an atom?..."
 
-4. MessageChatMemoryAdvisor.after(response)
-   └─ Saves [USER: Tell me a joke] + [ASSISTANT: Why can't...] into ChatMemory
+  4. Advisor saves new turn back into ChatMemory for "user-42"
 
-5. Response returned to caller.
+  5. Tokens stream back to React UI as SSE  →  appear word by word
 ```
 
----
-
-### Implementation in Code
-
-```java
-@RestController
-public class OllamaController {
-
-    private final ChatClient chatClient;
-    private final ChatMemory chatMemory;   // in-memory store, shared across requests
-
-    public OllamaController(ChatClient.Builder builder) {
-        // MessageWindowChatMemory keeps the last 20 messages (configurable).
-        // One instance is shared; histories are isolated by conversationId.
-        this.chatMemory = MessageWindowChatMemory.builder().build();
-
-        // Build ChatClient without a fixed advisor — each request supplies its own.
-        this.chatClient = builder.build();
-    }
-
-    @GetMapping("/api/{message}")
-    public ResponseEntity<String> getAnswer(
-            @PathVariable String message,
-            @RequestParam(defaultValue = "default") String conversationId) {
-
-        return ResponseEntity.ok(
-            chatClient.prompt(message)
-                // A fresh advisor is built per request, scoped to conversationId.
-                // The shared chatMemory still holds all history across requests.
-                .advisors(MessageChatMemoryAdvisor.builder(chatMemory)
-                        .conversationId(conversationId)   // ← key line
-                        .build())
-                .call()
-                .content()
-        );
-    }
-}
-```
-
-#### Key design decisions explained
+### Key design decisions
 
 | Decision | Reason |
 |---|---|
-| `chatMemory` is `private final` | It is a shared store — must not be reassigned. |
-| `chatMemory` is created **once** in the constructor | All conversations are stored in one in-memory map, keyed by `conversationId`. Creating it once avoids wiping history on every request. |
-| Advisor is built **per request** | This is the correct way to pass a dynamic `conversationId` in Spring AI 1.1.x. The advisor is a lightweight wrapper; only the `chatMemory` is expensive. |
-| `conversationId` is a **query parameter** | Lets each client (user, browser tab, test session) maintain an independent conversation thread. |
-| Default `conversationId = "default"` | Ensures the endpoint still works without the param (useful for quick tests). |
+| `chatMemory` is `private final` | Shared store — must never be reassigned |
+| Created once in constructor | Single in-memory map keyed by `conversationId`; recreating it wipes all history |
+| Advisor built **per request** | Required to pass a dynamic `conversationId` in Spring AI 1.1.x |
+| `MessageWindowChatMemory` default 20 msgs | Prevents the prompt from growing unbounded and hitting Ollama's context limit |
+| Frontend generates `conversationId` | `newChat()` creates a new `session-<timestamp>` — old session data persists in backend memory but is no longer referenced |
 
-#### Window size
-
-`MessageWindowChatMemory` keeps the **last N messages** (default: 20). Older messages are automatically evicted. To customise:
-
-```java
-this.chatMemory = MessageWindowChatMemory.builder()
-        .maxMessages(10)   // keep last 10 messages
-        .build();
-```
 ---
 
-## How the Pieces Fit Together
+## Common Issues & Troubleshooting
 
-```
-Postman / Browser
-      │
-      │  GET /api/{message}?conversationId=xyz
-      ▼
-┌─────────────────────────────────────┐
-│         OllamaController            │
-│  - builds MessageChatMemoryAdvisor  │
-│  - calls ChatClient.prompt()        │
-└────────────────┬────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────┐
-│      MessageChatMemoryAdvisor       │  ← reads/writes MessageWindowChatMemory
-│  1. prepend history to prompt       │
-│  2. pass enriched prompt through    │
-│  3. save new turn after response    │
-└────────────────┬────────────────────┘
-                 │
-                 ▼
-┌─────────────────────────────────────┐
-│     Spring AI OllamaChatModel       │  ← OllamaClientConfig sets 300s read timeout
-│  POST http://localhost:11434/api/chat│
-└────────────────┬────────────────────┘
-                 │
-                 ▼
-        Ollama (mistral:latest)
-         running locally
+### `400 Bad Request` from Ollama
+
+| Cause | Fix |
+|---|---|
+| Model not pulled | `ollama pull mistral` |
+| Ollama not running | `ollama serve` |
+| Wrong model name | Match exactly what `ollama list` shows, update `application.properties` |
+
+### Responses are slow (20–30 s on first request)
+
+Ollama is loading the model cold. Start with `OLLAMA_KEEP_ALIVE=-1` (see Backend Setup Step 4).
+
+### Frontend shows blank page or "Failed to fetch"
+
+1. Confirm Spring Boot is running: `curl http://localhost:8080/`
+2. Confirm the `.venv` is **activated** before running `npm run dev`
+3. Check Vite terminal — proxy errors appear with a `[proxy]` prefix
+
+### `node: command not found` after activating venv on Windows
+
+```powershell
+$env:PATH = "$(Resolve-Path '.\.venv\Scripts');$env:PATH"
 ```
 
+### PowerShell `Activate.ps1` is blocked by execution policy
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+---
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).

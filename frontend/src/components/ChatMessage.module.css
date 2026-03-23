@@ -1,0 +1,113 @@
+.message {
+  display: flex;
+  gap: 10px;
+  max-width: 82%;
+  animation: pop 0.18s ease;
+}
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* User messages sit on the right */
+.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.assistant {
+  align-self: flex-start;
+}
+
+/* Avatar circle */
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.user .avatar {
+  background: var(--primary);
+  color: #fff;
+}
+
+.assistant .avatar {
+  background: var(--surface);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+/* Body = bubble + timestamp */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user .body {
+  align-items: flex-end;
+}
+
+/* Bubble */
+.bubble {
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 16px;
+}
+
+.user .bubble {
+  background: var(--primary);
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.assistant .bubble {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.error {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #dc2626 !important;
+}
+
+/* Timestamp */
+.time {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+/* Blinking streaming cursor */
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 13px;
+  background: var(--primary);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 1px;
+  animation: blink 0.9s step-end infinite;
+}
+
+.assistant .cursor {
+  background: var(--primary);
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+

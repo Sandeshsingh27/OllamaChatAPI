@@ -8,27 +8,22 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 
+@CrossOrigin(origins = "*")
 @RestController
 public class OllamaController {
 
     private final ChatClient chatClient;
     private final ChatMemory chatMemory;
 
-    public OllamaController(ChatClient.Builder builder) {
-        // MessageWindowChatMemory keeps the last 20 messages by default.
-        // Shared across requests; isolation is achieved via conversationId per request.
-        this.chatMemory = MessageWindowChatMemory.builder().build();
+    /** Request body used by the POST endpoints (avoids URL path-encoding issues). */
+    public record ChatRequest(String message, String conversationId) {}
 
-        // Build the ChatClient WITHOUT a default advisor so that each request
-        // can supply its own conversationId-scoped advisor below.
+    public OllamaController(ChatClient.Builder builder) {
+        this.chatMemory = MessageWindowChatMemory.builder().build();
         this.chatClient = builder.build();
     }
 
@@ -46,12 +41,15 @@ public class OllamaController {
     public ResponseEntity<String> getAnswer(
             @PathVariable String message,
             @RequestParam(defaultValue = "default") String conversationId) {
+        return chat(new ChatRequest(message, conversationId));
+    }
 
-        ChatResponse chatResponse = chatClient.prompt(message)
-                // Build a fresh advisor with the caller's conversationId.
-                // The shared chatMemory keeps history per conversationId.
+    // ── POST /api/chat — blocking ─────────────────────────────────────────────
+    @PostMapping("/api/chat")
+    public ResponseEntity<String> chat(@RequestBody ChatRequest req) {
+        ChatResponse chatResponse = chatClient.prompt(req.message())
                 .advisors(MessageChatMemoryAdvisor.builder(chatMemory)
-                        .conversationId(conversationId)
+                        .conversationId(req.conversationId() != null ? req.conversationId() : "default")
                         .build())
                 .call()
                 .chatResponse();
@@ -67,19 +65,12 @@ public class OllamaController {
         return ResponseEntity.ok(chatResponse.getResult().getOutput().getText());
     }
 
-    /**
-     * Streaming endpoint – tokens arrive as SSE events.
-     * Pass conversationId to keep separate memory per user/session.
-     * Example: GET /api/stream/Hello?conversationId=user-123
-     */
-    @GetMapping(value = "/api/stream/{message}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<String> getStreamAnswer(
-            @PathVariable String message,
-            @RequestParam(defaultValue = "default") String conversationId) {
-
-        return chatClient.prompt(message)
+    // ── POST /api/chat/stream — streaming SSE ─────────────────────────────────
+    @PostMapping(value = "/api/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<String> chatStream(@RequestBody ChatRequest req) {
+        return chatClient.prompt(req.message())
                 .advisors(MessageChatMemoryAdvisor.builder(chatMemory)
-                        .conversationId(conversationId)
+                        .conversationId(req.conversationId() != null ? req.conversationId() : "default")
                         .build())
                 .stream()
                 .content();
