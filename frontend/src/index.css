@@ -1,0 +1,4 @@
+/* Imported once in main.tsx — defines global baseline only */
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+

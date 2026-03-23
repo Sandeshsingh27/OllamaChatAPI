@@ -31,3 +31,31 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Frontend (React + Vite + TypeScript) ###
+
+# Dependencies — never commit, always reinstall via npm install
+frontend/node_modules/
+
+# Python virtual environment used by nodeenv to host Node.js locally
+frontend/.venv/
+
+# Vite production build output
+frontend/dist/
+
+# Vite internal cache (auto-generated, safe to delete)
+frontend/.vite/
+
+# TypeScript incremental build cache
+frontend/*.tsbuildinfo
+
+# Test coverage reports
+frontend/coverage/
+
+# ── Environment files ────────────────────────────────────────────────────────
+# .env              → committed (shared, non-sensitive defaults)
+# .env.development  → committed (dev defaults, no secrets)
+# .env.production   → committed (prod defaults, no secrets)
+# .env.local and .env.*.local → IGNORED (machine-specific / secret overrides)
+frontend/.env.local
+frontend/.env.*.local
