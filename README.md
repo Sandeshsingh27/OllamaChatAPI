@@ -227,6 +227,8 @@ data: Paris.
 ## Frontend — How It Connects to the Backend
 
 The React app (`localhost:5173`) and the Spring Boot API (`localhost:8080`) are on **different ports**, which means different origins and normally triggers CORS errors.
+<img width="515" height="419" alt="image" src="https://github.com/user-attachments/assets/8fa81e19-102c-46c7-a6b9-cf3e693999ec" />
+
 
 **Vite's dev-server proxy** solves this transparently:
 
