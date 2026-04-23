@@ -1,5 +1,8 @@
 package com.springai.springaicode;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Flux;
 
+@Tag(name = "Ollama Chat", description = "Endpoints for chatting with a local Ollama LLM")
 @CrossOrigin(origins = "*")
 @RestController
 public class OllamaController {
@@ -27,6 +31,7 @@ public class OllamaController {
         this.chatClient = builder.build();
     }
 
+    @Operation(summary = "Health check", description = "Returns a welcome message to verify the API is running.")
     @GetMapping("/")
     public ResponseEntity<String> welcome() {
         return ResponseEntity.ok("Welcome to the Ollama Chat API!");
@@ -37,14 +42,18 @@ public class OllamaController {
      * Pass a conversationId query-param to keep separate histories per user/session.
      * Example: GET /api/Hello?conversationId=user-123
      */
+    @Operation(summary = "Chat (GET — blocking)",
+            description = "Send a message via URL path and receive a complete response. Supports conversation memory via conversationId.")
     @GetMapping("/api/{message}")
     public ResponseEntity<String> getAnswer(
-            @PathVariable String message,
-            @RequestParam(defaultValue = "default") String conversationId) {
+            @Parameter(description = "The chat message") @PathVariable String message,
+            @Parameter(description = "Conversation ID for memory isolation") @RequestParam(defaultValue = "default") String conversationId) {
         return chat(new ChatRequest(message, conversationId));
     }
 
     // ── POST /api/chat — blocking ─────────────────────────────────────────────
+    @Operation(summary = "Chat (POST — blocking)",
+            description = "Send a JSON message and receive the full response once the LLM finishes generating.")
     @PostMapping("/api/chat")
     public ResponseEntity<String> chat(@RequestBody ChatRequest req) {
         ChatResponse chatResponse = chatClient.prompt(req.message())
@@ -66,6 +75,8 @@ public class OllamaController {
     }
 
     // ── POST /api/chat/stream — streaming SSE ─────────────────────────────────
+    @Operation(summary = "Chat (POST — streaming SSE)",
+            description = "Send a JSON message and receive tokens as Server-Sent Events in real time.")
     @PostMapping(value = "/api/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> chatStream(@RequestBody ChatRequest req) {
         return chatClient.prompt(req.message())

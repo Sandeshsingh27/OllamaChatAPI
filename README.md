@@ -14,6 +14,7 @@ The **Spring Boot** backend exposes a streaming REST API powered by **Spring AI*
 | AI Integration | Spring AI | 1.1.3 |
 | LLM Runtime | Ollama (local) | latest |
 | Default Model | Mistral 7B | latest |
+| API Documentation | springdoc-openapi (Swagger UI) | 2.8.6 |
 | Backend Build | Maven Wrapper | included |
 | Frontend Language | TypeScript | 5.6 |
 | Frontend Framework | React | 18.3 |
@@ -33,7 +34,8 @@ OllamaChatAPI/
 │       ├── java/com/springai/springaicode/
 │       │   ├── SpringAiCodeApplication.java   # Entry point
 │       │   ├── OllamaController.java          # REST + SSE endpoints
-│       │   └── OllamaClientConfig.java        # WebClient timeout config
+│       │   ├── OllamaClientConfig.java        # WebClient timeout config
+│       │   └── OpenApiConfig.java             # Swagger / OpenAPI configuration
 │       └── resources/
 │           └── application.properties         # Ollama & Spring settings
 │
@@ -185,6 +187,14 @@ API is live at **http://localhost:8080**
 | `GET` | `/api/{message}?conversationId=` | Blocking — legacy, for Postman |
 | `POST` | `/api/chat` | Blocking — JSON body |
 | `POST` | `/api/chat/stream` | **Streaming SSE** ← used by the React UI |
+| `GET` | `/swagger-ui.html` | **Swagger UI** — interactive API docs |
+| `GET` | `/v3/api-docs` | OpenAPI 3.0 JSON spec |
+
+### Swagger UI
+
+Once the Spring Boot app is running, open **http://localhost:8080/swagger-ui.html** in your browser to explore and test all endpoints interactively — no Postman needed.
+
+![Swagger UI](https://img.shields.io/badge/Swagger-UI-85EA2D?logo=swagger&logoColor=black)
 
 **Example streaming request:**
 
